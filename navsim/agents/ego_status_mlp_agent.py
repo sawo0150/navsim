@@ -9,18 +9,19 @@ from navsim.agents.abstract_agent import AbstractAgent
 from navsim.common.dataclasses import AgentInput, Scene, SensorConfig
 from navsim.planning.training.abstract_feature_target_builder import AbstractFeatureBuilder, AbstractTargetBuilder
 
-
+# agent YAML 파일에서 설정한 클래스 구현
+# AbstractFeatureBuilder 클래스를 상속받아서 구현, interface 구현
 class EgoStatusFeatureBuilder(AbstractFeatureBuilder):
     """Input feature builder of EgoStatusMLP."""
 
     def __init__(self):
         """Initializes the feature builder."""
 
-    def get_unique_name(self) -> str:
+    def get_unique_name(self) -> str: # type hint : 리턴값은 str
         """Inherited, see superclass."""
         return "ego_status_feature"
 
-    def compute_features(self, agent_input: AgentInput) -> Dict[str, torch.Tensor]:
+    def compute_features(self, agent_input: AgentInput) -> Dict[str, torch.Tensor]: # type hint : 리턴값은 Dict[str, torch.Tensor]
         """Inherited, see superclass."""
         ego_status = agent_input.ego_statuses[-1]
         velocity = torch.tensor(ego_status.ego_velocity)

@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Tuple
 
 import hydra
-import pytorch_lightning as pl
+import pytorch_lightning as pl #PyTorch Lightning은 PyTorch 반복되는 학습 코드를 자동화해주는 프레임워크
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
@@ -76,21 +76,31 @@ def build_datasets(cfg: DictConfig, agent: AbstractAgent) -> Tuple[Dataset, Data
 
     return train_data, val_data
 
-
-@hydra.main(config_path=CONFIG_PATH, config_name=CONFIG_NAME, version_base=None)
-def main(cfg: DictConfig) -> None:
+# hydra 모듈 활용함 - 복잡한 설정 (학습률, 배치 사이즈, 최대 에폭 등) 쉽게 할 수 있음
+@hydra.main(config_path=CONFIG_PATH, config_name=CONFIG_NAME, version_base=None)    
+# hydra config 파일 받아오기 : config/training/default_training.yaml --> 
+def main(cfg: DictConfig) -> None: # type hint 문법 : cfg 타입은 DictConfig, 리턴값은 None
     """
     Main entrypoint for training an agent.
     :param cfg: omegaconf dictionary
     """
 
-    pl.seed_everything(cfg.seed, workers=True)
+    pl.seed_everything(cfg.seed, workers=True) # 모든 랜덤 시드 고정
     logger.info(f"Global Seed set to {cfg.seed}")
 
     logger.info(f"Path where all results are stored: {cfg.output_dir}")
 
     logger.info("Building Agent")
-    agent: AbstractAgent = instantiate(cfg.agent)
+    agent: AbstractAgent = instantiate(cfg.agent) # type hint : agent라는 변수의 타입은 AbstractAgent(class) or 하위 class!!
+    # type 강제는 아님
+    # instantiate : hydra config 파일 중 agent 설정 부분 활용 class 객체 생성
+    #     defaults:
+    # - default_common
+    # - default_evaluation
+    # - default_train_val_test_log_split
+    # - agent: ego_status_mlp_agent
+    # - _self_
+    # 여기서 config/agent/ego_status_mlp_agent.yaml 파일 활용해서 그걸 객체로 만들어줌
 
     logger.info("Building Lightning Module")
     lightning_module = AgentLightningModule(
@@ -129,6 +139,8 @@ def main(cfg: DictConfig) -> None:
 
     logger.info("Building Trainer")
     trainer = pl.Trainer(**cfg.trainer.params, callbacks=agent.get_training_callbacks())
+    # pytorch lightning trainer 객체 생성 : 학습 과정 관리
+    # yaml 파일 중 trainer 설정 부분 활용
 
     logger.info("Starting Training")
     trainer.fit(

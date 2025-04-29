@@ -1,11 +1,34 @@
 _target_: navsim.agents.ego_status_mlp_agent.EgoStatusMLPAgent
+# instantiate() 함수가 무슨 클래스를 만들지 알려주는 경로
 _convert_: 'all'
+# Hydra가 내부 딕셔너리(DictConfig)를 실제 객체로 변환할 때 어떻게 할지
+# Hydra는 DictConfig라는 특수한 딕셔너리 객체를 사용
+# 일부 객체에서는 dictconfig 파일 싫어해서 이걸 못 받아오는 경우가 있음
+# 그래서 python 정통 객체 (리스트, 딕셔너리)로 변환해주는 것
+
+# convert none이면 변환 안 하고 그냥 DictConfig 그대로 넘겨줌
+
 
 trajectory_sampling:
   _target_: nuplan.planning.simulation.trajectory.trajectory_sampling.TrajectorySampling
   _convert_: 'all'
   time_horizon: 4
   interval_length: 0.5
+# 중첩된 클래스 객체도 생성하겠다는 의미
+# python으로 다음과 같은 의미
+# from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
+# trajectory_sampling = TrajectorySampling(time_horizon=4, interval_length=0.5)
+
+# 이 값이 나중에 EgoStatusMLPAgent의 인자로 들어감:
+# EgoStatusMLPAgent(..., trajectory_sampling=trajectory_sampling)
+
+
+
 checkpoint_path: null
+# 모델 학습 재시작할 때 checkpoint를 로드할 수 있는데, 지금은 안 쓰겠다는 의미
+
 hidden_layer_dim: 512
+# mlp 모델 학습 시 사용되는 은닉층의 차원 수
+# EgoStatusMLPAgent.__init__()에 직접 넘겨질 값들
 lr: 1e-4
+# 학습률

@@ -8,7 +8,9 @@ from nuplan.planning.simulation.trajectory.trajectory_sampling import Trajectory
 from navsim.common.dataclasses import AgentInput, SensorConfig, Trajectory
 from navsim.planning.training.abstract_feature_target_builder import AbstractFeatureBuilder, AbstractTargetBuilder
 
-
+# AbstractAgent는 추상 클래스 (abstract class) 라고 부르고, 설계의 뼈대 같은 존재
+# agent의 공통적인 interface를 정의하는 추상 클래스
+# 모든 agent는 이 클래스를 상속받아야 함
 class AbstractAgent(torch.nn.Module, ABC):
     """Interface for an agent in NAVSIM."""
 
