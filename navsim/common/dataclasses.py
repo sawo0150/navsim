@@ -731,24 +731,28 @@ class Scene:
 
 
 @dataclass
+# @dataclass는 Python 데코레이터로, 클래스를 자동으로 __init__, __repr__, __eq__ 같은 함수들을 생성해주는 편리한 기능
 class SceneFilter:
     """Scene filtering configuration for scene loading."""
+    #scene의 구성 설정
 
-    num_history_frames: int = 4
-    num_future_frames: int = 10
-    frame_interval: Optional[int] = None
-    has_route: bool = True
+    num_history_frames: int = 4  # 현재 시점에서 과거로 몇 프레임을 볼지 결정
+    num_future_frames: int = 10  # 현재 시점에서 미래로 몇 프레임을 볼지 결정
+    frame_interval: Optional[int] = None  # 면을 추출할 때 몇 프레임씩 건너뛸지 결정 (None이면 겹치지 않게)? <-- 다시 한번 더 확인
+    has_route: bool = True  # 경로 정보가 있는 장면만 사용
 
-    max_scenes: Optional[int] = None
-    log_names: Optional[List[str]] = None
-    tokens: Optional[List[str]] = None
-    include_synthetic_scenes: bool = False
-    all_mapping: Optional[Dict[Tuple[str, str], List[Tuple[str, str]]]] = None
-    synthetic_scene_tokens: Optional[List[str]] = None
+    max_scenes: Optional[int] = None  # 최대 몇 개의 장면을 로드할지 제한
+    log_names: Optional[List[str]] = None  # 특정 로그 파일들만 사용 (예: 특정 날짜/차량의 로그)
+    tokens: Optional[List[str]] = None  # 특정 장면 토큰들만 사용
+
+    # 합성 장면 포함 여부 --> 2단계 학습(two-stage training) 시나리오에서 사용됨
+    include_synthetic_scenes: bool = False  # 합성 장면 포함 여부
+    all_mapping: Optional[Dict[Tuple[str, str], List[Tuple[str, str]]]] = None  # 원본 장면과 합성 장면 간의 매핑 정보
+    synthetic_scene_tokens: Optional[List[str]] = None  # 특정 합성 장면들만 사용
 
     # for reactive and non_reactive
-    reactive_synthetic_initial_tokens: Optional[List[str]] = None
-    non_reactive_synthetic_initial_tokens: Optional[List[str]] = None
+    reactive_synthetic_initial_tokens: Optional[List[str]] = None  # 반응형 합성 장면의 초기 토큰들
+    non_reactive_synthetic_initial_tokens: Optional[List[str]] = None  # 비반응형 합성 장면의 초기 토큰들
 
     # TODO: expand filter options
 

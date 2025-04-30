@@ -28,6 +28,8 @@ class AgentLightningModule(pl.LightningModule):
         prediction = self.agent.forward(features)
         loss = self.agent.compute_loss(features, targets, prediction)
         self.log(f"{logging_prefix}/loss", loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
+        # → PyTorch Lightning이 자동으로 로그 기록 (TensorBoard용 등)
+
         return loss
 
     def training_step(self, batch: Tuple[Dict[str, Tensor], Dict[str, Tensor]], batch_idx: int) -> Tensor:
@@ -51,3 +53,6 @@ class AgentLightningModule(pl.LightningModule):
     def configure_optimizers(self):
         """Inherited, see superclass."""
         return self.agent.get_optimizers()
+
+# AgentLightningModule은 PyTorch Lightning이 요구하는 인터페이스(training_step, validation_step, configure_optimizers)를 구현해서,
+# Agent를 그냥 PyTorch Lightning에 연결만 해주는 어댑터 역할을 하는 클래스!

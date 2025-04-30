@@ -13,6 +13,7 @@ from navsim.planning.training.abstract_feature_target_builder import AbstractFea
 # AbstractFeatureBuilder 클래스를 상속받아서 구현, interface 구현
 class EgoStatusFeatureBuilder(AbstractFeatureBuilder):
     """Input feature builder of EgoStatusMLP."""
+    # feature - model input 형식 정의
 
     def __init__(self):
         """Initializes the feature builder."""
@@ -28,6 +29,7 @@ class EgoStatusFeatureBuilder(AbstractFeatureBuilder):
         acceleration = torch.tensor(ego_status.ego_acceleration)
         driving_command = torch.tensor(ego_status.driving_command)
         ego_status_feature = torch.cat([velocity, acceleration, driving_command], dim=-1)
+        # velocity, acceleration, driving_command 3개의 텐서를 하나로 합친게 input 형식
         return {"ego_status": ego_status_feature}
 
 
@@ -50,6 +52,13 @@ class TrajectoryTargetBuilder(AbstractTargetBuilder):
         """Inherited, see superclass."""
         future_trajectory = scene.get_future_trajectory(num_trajectory_frames=self._trajectory_sampling.num_poses)
         return {"trajectory": torch.tensor(future_trajectory.poses)}
+# feature_builder와 target_builder는 DataLoader 안에서 호출 됨.
+# comput 함수에서 필요한 Scene, AgentInput은 Dataloader 내부에서 받음
+# 간랸한 구조 설명
+# Dataset → __getitem__ → (AgentInput, Scene) 생성 → 
+#     FeatureBuilder.compute_features(AgentInput)
+#     TargetBuilder.compute_targets(Scene)
+# → features / targets 딕셔너리 반환 → 모델 forward → loss
 
 
 class EgoStatusMLPAgent(AbstractAgent):
@@ -61,6 +70,7 @@ class EgoStatusMLPAgent(AbstractAgent):
         lr: float,
         checkpoint_path: Optional[str] = None,
         trajectory_sampling: TrajectorySampling = TrajectorySampling(time_horizon=4, interval_length=0.5),
+        # mlp output 차원수 영향
     ):
         """
         Initializes the agent interface for EgoStatusMLP.
@@ -73,7 +83,7 @@ class EgoStatusMLPAgent(AbstractAgent):
 
         self._checkpoint_path = checkpoint_path
 
-        self._lr = lr
+        self._lr = lr   
 
         self._mlp = torch.nn.Sequential(
             torch.nn.Linear(8, hidden_layer_dim),

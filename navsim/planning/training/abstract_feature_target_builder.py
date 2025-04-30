@@ -25,6 +25,7 @@ class AbstractFeatureBuilder:
         Outputs a dictionary where each item has a unique identifier and maps to a single feature tensor.
         One FeatureBuilder can return a dict with multiple FeatureTensors.
         """
+        # model input 형식 정의
 
 
 class AbstractTargetBuilder:
@@ -44,3 +45,4 @@ class AbstractTargetBuilder:
         Outputs a dictionary where each item has a unique identifier and maps to a single target tensor.
         One TargetBuilder can return a dict with multiple TargetTensors.
         """
+        # model의 목표 output 형식 정의
