@@ -94,6 +94,8 @@ def build_datasets(cfg: DictConfig, agent: AbstractAgent) -> Tuple[Dataset, Data
         cache_path=cfg.cache_path,
         force_cache_computation=cfg.force_cache_computation,
     )
+    # cache_path는 default_training.yaml 파일에서 설정되어 있음. 
+    # 설정값은 ${oc.env:NAVSIM_EXP_ROOT}/training_cache로 되어 있음.
 
     val_data = Dataset(
         scene_loader=val_scene_loader,
@@ -141,9 +143,9 @@ def main(cfg: DictConfig) -> None: # type hint 문법 : cfg 타입은 DictConfig
     # - 그러면 `training_step()`, `validation_step()` 등을 오버라이드할 수 있음
 
     if cfg.use_cache_without_dataset:
-        # 캐시를 불러오기만 하는 경우 (CacheOnlyDataset 사용)
-        # 이미 생성된 feature/target들을 .pt 파일 등으로 저장해뒀고,
-        # 그걸 메모리에 다시 로딩만 해서 쓰는 구조
+        # 왠만하면 안쓰는듯 (diffusion drive도 안씀) - 이미 cache 파일이 있는경우에만 사용함.
+        # 이미 미리 생성된 feature/target 캐시(.gz 파일)만을 이용해서 빠르게 데이터를 불러오는 Dataset.
+        # SceneLoader, AgentInput, Scene 같은 복잡한 처리 없이도 학습 데이터를 메모리에 바로 공급해주는 "초간편 모드"
         logger.info("Using cached data without building SceneLoader")
         assert (
             not cfg.force_cache_computation
@@ -170,6 +172,9 @@ def main(cfg: DictConfig) -> None: # type hint 문법 : cfg 타입은 DictConfig
 
     logger.info("Building Datasets")
     train_dataloader = DataLoader(train_data, **cfg.dataloader.params, shuffle=True)
+    # cfg.dataloader.params는 DictConfig → 내부에는 batch_size, num_workers 등이 들어있음
+    # **는 딕셔너리를 언팩해서 키워드 인자로 전달하는 문법
+
     logger.info("Num training samples: %d", len(train_data))
     val_dataloader = DataLoader(val_data, **cfg.dataloader.params, shuffle=False)
     logger.info("Num validation samples: %d", len(val_data))
@@ -178,6 +183,9 @@ def main(cfg: DictConfig) -> None: # type hint 문법 : cfg 타입은 DictConfig
     trainer = pl.Trainer(**cfg.trainer.params, callbacks=agent.get_training_callbacks())
     # pytorch lightning trainer 객체 생성 : 학습 과정 관리
     # yaml 파일 중 trainer 설정 부분 활용
+    # **cfg.trainer.params: 예: {"max_epochs": 10, "gpus": 1}
+        # agent.get_training_callbacks()는 예를 들어:
+        # ModelCheckpoint, EarlyStopping 등의 콜백 리스트 반환할 수 있음
 
     logger.info("Starting Training")
     trainer.fit(
