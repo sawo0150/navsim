@@ -2,7 +2,7 @@
 
 defaults:
   - train_test_split: ???
-  # Worker that is used to run simulations
+  # Worker that is used to run simulations - common/worker/ray_distributed_no_torch.yaml에서 확인할 수 있음
   - worker: ray_distributed_no_torch
   - _self_
 
@@ -13,7 +13,7 @@ selected_simulation_metrics: null
 # Sets verbosity level, in particular determines if progress bars are shown or not.
 verbose: false
 
-# Logger
+# Logger - 걍 logger 설정임
 logger_level: info                                  # Level of logger
 logger_format_string: null                          # Logger format string, set null to use the default format string
 

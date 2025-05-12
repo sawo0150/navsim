@@ -277,12 +277,41 @@ class MetricCacheProcessor:
         )
 
     def compute_and_save_metric_cache(self, scenario: NavSimScenario) -> Optional[CacheMetadataEntry]:
+        # 이 함수 한 줄로 인해 "이 시나리오에 대해 평가에 필요한 모든 기준 정보"가 캐시 파일로 생성됨.
+        # 이후에는 모델이 만든 예측 경로만 넣어서 메트릭을 바로 계산할 수 있는 준비 상태가 됨.
+
+        # 1. 캐시 경로 설정 및 캐시 존재 여부 확인
         file_name = self._build_file_path(scenario)
+        # metric_cache.pkl 파일을 저장할 전체 경로를 만듭니다.
+
+        # 2. 이미 캐시가 존재하고 강제 재계산이 아니라면 캐시 로드
         assert file_name is not None, "Cache path can not be None for saving cache."
         if file_name.exists() and not self._force_feature_computation:
             return CacheMetadataEntry(file_name)
+        # 이미 같은 시나리오에 대한 캐시 파일이 존재하고
+        # force_feature_computation=False면
+        # -> 캐시 재계산 없이 기존 파일 경로만 메타데이터로 반환
+        # 📌 이걸 통해 중복 계산 방지 및 속도 최적화
+        
+        # 3. 캐시가 없거나 강제 재계산일 경우 → 새로 계산
         metric_cache = self.compute_metric_cache(scenario)
+        # 이 한 줄이 실제 heavy한 작업의 핵심입니다. 내부적으로는:
+        # 🧠 내부에서 수행되는 작업 (중요)
+        #  - 플래너 입력 생성 → 시나리오 초기 상태 기반
+        #  - PDMClosedPlanner 경로 생성 → 모델 기반 주행 시뮬레이션
+        #  - GT 기반 객체 추적 정보 보간(interpolate) → 10Hz 정밀도 확보
+        #  - 신호등 상태 보간
+        #  - 관찰값 생성 (PDMObservation) → 경로 기반 상태 평가
+        #  - Ego GT 궤적, 과거/미래 객체 궤적 추출
+        #  - 맵 정보 설정
+        #  - 최종적으로 MetricCache 객체 생성
+        # 📌 MetricCache는 위 모든 데이터를 하나로 묶은 평가용 구조체입니다.
+
+        # 4. 계산된 캐시를 디스크에 저장
         metric_cache.dump()
+        # metric_cache.pkl 파일로 저장
+
+        # 5. 캐시 메타데이터 객체 반환
         return CacheMetadataEntry(metric_cache.file_path)
 
     def _extract_ego_future_trajectory(self, scenario: NavSimScenario) -> Trajectory:
@@ -311,39 +340,93 @@ class MetricCacheProcessor:
         )
 
     def compute_metric_cache(self, scenario: NavSimScenario) -> MetricCache:
+        # 이 함수는 NavSimScenario를 받아서 그 안의 주행 상황, 객체, 신호등, 지도 등을 기반으로
+        # 정량화 가능한 시뮬레이션 캐시(MetricCache)를 생성함.
+        # 1. 캐시 파일 경로 생성
         file_name = self._build_file_path(scenario)
+        # 이 캐시 데이터를 어떤 경로에 저장할지 결정
+        # 내부적으로 log_name/scenario_type/token/metric_cache.pkl 경로 구성
 
         # TODO: we should infer this from the scene metadata
+        # 2. 합성 시나리오 여부 판단
         is_synthetic_scene = len(scenario.token) == 17
+        # token 길이가 17이면 synthetic scene으로 판단 (현재는 간단한 heuristic 사용)
+        # 이후 SceneFrameType을 결정할 때 사용됨
 
         # init and run PDM-Closed
+        # 3. PDMClosedPlanner 초기화 + 예측 경로 생성
         planner_input, planner_initialization = self._get_planner_inputs(scenario)
-        self._pdm_closed.initialize(planner_initialization)
-        pdm_closed_trajectory = self._pdm_closed.compute_planner_trajectory(planner_input)
+        # → 시뮬레이션에 필요한 입력 준비
+        # PlannerInitialization	지도 정보, 목적지, 경로 블록 등 초기 설정
+        # PlannerInput	초기 ego 상태, 주변 객체 상태, 신호등 상태 등
 
+        self._pdm_closed.initialize(planner_initialization)
+        # → PDMClosedPlanner를 초기화합니다.
+        # 이 플래너는 학습 기반이 아닌 IDM 기반 물리 시뮬레이터입니다.
+        # 사용된 정책: BatchIDMPolicy
+        # 예: 앞차와의 거리, 속도, 가속도 등을 기반으로 "안전하게 갈 수 있는 궤적" 계산
+
+        pdm_closed_trajectory = self._pdm_closed.compute_planner_trajectory(planner_input)
+        # → 실제로 궤적(trajectory)을 계산합니다.
+        # 사용 방식:
+        # 경로 중심선을 따라
+        # 양옆 레인 변경을 시도하며
+        # 속도 제한, 앞차 추종 등을 고려하여
+        # 최적 또는 안전한 경로 후보를 생성
+
+        # ❗ 이 궤적은 실제 모델 예측이 아닌, 시뮬레이션된 안전 기반 궤적입니다.
+
+        # 평가용 플래너(PDMClosedPlanner)를 초기화하고 실행
+        # 실제 주행 계획(Predicted trajectory)을 생성 (planning 관점에서 매우 중요)
+        # 이 경로는 나중에 GT trajectory와 비교해 metric 평가 기준이 됨
+
+        # 4. 경로 정보 로드
         route_roadblock_dict, route_lane_dict = self._load_route_dicts(
             scenario, planner_initialization.route_roadblock_ids
         )
+        # 경로에 포함된 roadblock과 차선(lane)의 geometry를 불러옴
+        # 이후 traffic light, 주변 객체 등과의 공간 관계 판단에 활용됨
 
+        # 5. 객체 탐지 정보 보간 (10Hz 정밀도로)
         interpolated_detection_tracks = self._interpolate_gt_observation(scenario)
-        interpolated_traffic_light_status = self._interpolate_traffic_light_status(scenario)
+        # 주변 객체의 상태 (위치, 속도 등)를 시나리오 시간 단위(보통 2Hz) → 10Hz로 보간
+        # StateInterpolator 사용
+        # 이후 planner나 평가자가 시간 정렬된 고정밀 객체 정보를 활용할 수 있게 됨  
 
+        # 6. 신호등 상태도 시간 단위로 보간
+        interpolated_traffic_light_status = self._interpolate_traffic_light_status(scenario)
+        # 프레임별 traffic light 상태를 시간 정렬된 리스트로 변환
+        # 예: [초록 → 빨강 → 빨강 …] 리스트로 쭉 정리됨
+
+        # 7. 관찰 정보 생성 (PDMObservation)
         observation = self._build_pdm_observation(
             interpolated_detection_tracks=interpolated_detection_tracks,
             interpolated_traffic_light_data=interpolated_traffic_light_status,
             route_lane_dict=route_lane_dict,
         )
-        future_tracked_objects = interpolated_detection_tracks[1:]
+        # 위에서 만든 객체/신호등/지도 정보를 기반으로 PDMObservation 객체 생성
+        # planner가 판단한 경로와 어떤 상황에서 움직이는지를 평가에 활용할 수 있음
 
+        # 8. 미래 객체 정보 준비
+        future_tracked_objects = interpolated_detection_tracks[1:]
+        # 현재 시점 이후 프레임에 해당하는 객체 상태만 분리해서 저장
+
+        # 9. 과거 ego 궤적 생성
         past_human_trajectory = InterpolatedTrajectory(
             [ego_state for ego_state in scenario.get_ego_past_trajectory(0, 1.5)]
         )
+        # ego 차량의 과거 상태를 시간 순서대로 모아 trajectory 구성
+        # 시뮬레이터나 loss 계산 시 히스토리 기반 정보로 쓰임
 
+        # 10. 미래 GT trajectory 구성 (합성 scene 제외)
         if not is_synthetic_scene:
             human_trajectory = self._extract_ego_future_trajectory(scenario)
         else:
             human_trajectory = None
+        # 실제 로그 데이터는 미래 GT가 존재하므로 추출
+        # 합성 데이터는 미래 GT가 없는 경우가 많아 생략
 
+        # 11. MetricCache 객체 생성
         # save and dump features
         return MetricCache(
             file_path=file_name,
@@ -369,3 +452,8 @@ class MetricCacheProcessor:
                 map_name=scenario.map_api.map_name,
             ),
         )
+        # ✅ 정리: 이 함수는 무엇을 하는가?
+        # 단계	내용
+        # 입력	하나의 NavSimScenario
+        # 처리	플래너 실행, 객체/신호등 정보 보간, GT trajectory 생성
+        # 출력	평가 기준 정보를 포함한 MetricCache 객체 (→ 캐싱됨)

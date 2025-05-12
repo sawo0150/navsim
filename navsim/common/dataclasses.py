@@ -473,10 +473,17 @@ class Scene:
     def from_scene_dict_list(
         cls,
         scene_dict_list: List[Dict],
+        # .pkl에서 로딩된 raw 프레임 리스트 (한 시나리오에 해당)
+        # 각 요소는 1프레임 (시간 t) 데이터
         sensor_blobs_path: Path,
+        # LiDAR, 카메라 등의 raw binary 파일이 저장된 디렉토리
         num_history_frames: int,
         num_future_frames: int,
+        # 몇 개의 과거/미래 프레임을 포함할지 설정
+        # 학습/평가 시 temporal context를 조절하는 데 사용
         sensor_config: SensorConfig,
+        # 어떤 센서를 로딩할지, 시점별로 달라질 수 있는 설정값 포함 
+        # 예: 'camera_front'만 로딩할지, 'lidar_top' 포함할지 등
     ) -> Scene:
         """
         Load scene dataclass from scene dictionary list (for log loading).
@@ -487,6 +494,11 @@ class Scene:
         :param sensor_config: sensor config dataclass
         :return: scene dataclass
         """
+        # 🧠 이 함수의 핵심 목적
+        # .pkl 파일에서 로딩된 프레임 리스트(dict)들을 받아서 → 
+        # Scene이라는 정형화된 객체로 변환해 downstream (시뮬레이터, evaluator 등)에서 쉽게 쓸 수 있게 만듦
+
+        # 1️⃣ 메타데이터 생성
         assert len(scene_dict_list) >= 0, "Scene list is empty!"
         scene_metadata = SceneMetadata(
             log_name=scene_dict_list[num_history_frames - 1]["log_name"],
@@ -496,37 +508,55 @@ class Scene:
             num_history_frames=num_history_frames,
             num_future_frames=num_future_frames,
         )
-        map_api = cls._build_map_api(scene_metadata.map_name)
+        # 전체 시나리오의 정보를 정의하는 요약 구조
+        # log name
+        # map name
+        # scene token
+        # 초기 프레임 토큰 등
+        # 중심 프레임 기준 (num_history_frames - 1)
 
+        
+        # 2️⃣ 지도 API 로딩
+        map_api = cls._build_map_api(scene_metadata.map_name)
+        # 시뮬레이션이나 메트릭 계산 시 사용할 맵 객체 생성
+        # 나중에 차선, 경계 등 geometry 정보 추출에 활용
+
+        # 3️⃣ 프레임 단위로 구성
         frames: List[Frame] = []
         for frame_idx in range(len(scene_dict_list)):
             global_ego_status = cls._build_ego_status(scene_dict_list[frame_idx])
+            # ego 차량의 위치, 속도, heading
             annotations = cls._build_annotations(scene_dict_list[frame_idx])
+            # 주변 객체들 (차, 사람, 자전거 등)
 
-            sensor_names = sensor_config.get_sensors_at_iteration(frame_idx)
+            sensor_names = sensor_config.get_sensors_at_iteration(frame_idx)    
+            # sensor_config에 따라 어떤 센서를 불러올지 결정
 
             cameras = Cameras.from_camera_dict(
                 sensor_blobs_path=sensor_blobs_path,
                 camera_dict=scene_dict_list[frame_idx]["cams"],
                 sensor_names=sensor_names,
             )
+            # 카메라 이미지 로딩 (비활성화 시 empty)
 
             lidar = Lidar.from_paths(
                 sensor_blobs_path=sensor_blobs_path,
                 lidar_path=Path(scene_dict_list[frame_idx]["lidar_path"]),
                 sensor_names=sensor_names,
             )
+            # LiDAR 포인트 클라우드 로딩 (비활성화 시 empty)
 
             frame = Frame(
                 token=scene_dict_list[frame_idx]["token"],
                 timestamp=scene_dict_list[frame_idx]["timestamp"],
                 roadblock_ids=scene_dict_list[frame_idx]["roadblock_ids"],
                 traffic_lights=scene_dict_list[frame_idx]["traffic_lights"],
-                annotations=annotations,
-                ego_status=global_ego_status,
+                annotations=annotations, 
+                ego_status=global_ego_status, 
                 lidar=lidar,
                 cameras=cameras,
             )
+            # 이 모든 걸 합쳐서 하나의 시간 프레임 객체 구성
             frames.append(frame)
 
         return Scene(scene_metadata=scene_metadata, map_api=map_api, frames=frames)

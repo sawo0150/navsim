@@ -323,6 +323,7 @@ def create_scene_aggregators(
 
 
 @hydra.main(config_path=CONFIG_PATH, config_name=CONFIG_NAME, version_base=None)
+# Hydra config 로딩 "config/pdm_scoring/default_run_pdm_score"
 def main(cfg: DictConfig) -> None:
     """
     Main entrypoint for running PDMS evaluation.

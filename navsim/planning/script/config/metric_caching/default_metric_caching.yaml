@@ -1,4 +1,4 @@
-hydra:
+hydra:  # Hydra 실행 자체에 대한 설정입니다.
   run:
     dir: ${output_dir}
   output_subdir: ${output_dir}/code/hydra           # Store hydra's config breakdown here for debugging
@@ -7,11 +7,15 @@ hydra:
   job:
     chdir: False
 
-defaults:
+defaults:   # Hydra에서는 설정을 여러 파일로 나눌 수 있는데, 이 블록은 그 기본 구성을 지정함.
   - default_common
   - default_dataset_paths
-  - _self_
+  - _self_  # _self_는 현재 파일 내용이 마지막에 병합된다는 의미
 
 force_feature_computation: True
+# 이 값은 cache_data() 같은 함수에서 사용될 수 있음.
+# 의미: 이미 캐시된 데이터가 있어도 다시 강제로 계산하라는 설정임.
 
 output_dir: ${metric_cache_path}/metadata
+# default_dataset_paths.yaml 파일에서 
+# metric_cache_path: ${oc.env:NAVSIM_EXP_ROOT}/metric_cache 라 정의됨.
